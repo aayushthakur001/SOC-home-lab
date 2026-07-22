@@ -1,464 +1,259 @@
-\# MITRE ATT\&CK Mapping
+# MITRE ATT&CK Mapping
 
+## Overview
 
+This document provides comprehensive mapping of all detection use cases implemented in the Enterprise SOC Monitoring using Splunk SIEM project to the [MITRE ATT&CK Framework](https://attack.mitre.org/). 
 
-This document maps all implemented detection use cases in the Enterprise SOC Monitoring using Splunk SIEM project to the MITRE ATT\&CK Framework.
+The MITRE ATT&CK Framework is a globally recognized knowledge base of adversary tactics and techniques based on real-world observations. By mapping security detections to this framework, we establish a standardized approach to understanding attacker behavior and ensuring comprehensive threat coverage across different attack phases.
 
+This project implements multiple Windows security detections aligned with MITRE ATT&CK techniques commonly used by attackers during different phases of an intrusion, enabling effective SOC monitoring and threat detection.
 
+---
 
-\---
-
-
-
-\# Overview
-
-
-
-The MITRE ATT\&CK Framework is a globally recognized knowledge base of adversary tactics and techniques based on real-world observations. Mapping detections to MITRE ATT\&CK helps Security Operations Center (SOC) analysts understand attacker behavior, improve detection coverage, and standardize incident investigations.
-
-
-
-This project implements multiple Windows security detections aligned with MITRE ATT\&CK techniques commonly used by attackers during different phases of an intrusion.
-
-
-
-\---
-
-
-
-\# MITRE ATT\&CK Detection Mapping
-
-
+## Detection Mapping Summary
 
 | Detection Use Case | MITRE Tactic | Technique ID | Technique Name | Data Source |
-
-|--------------------|-------------|--------------|----------------|-------------|
-
+|---|---|---|---|---|
 | Failed Login Detection | Credential Access | T1110 | Brute Force | Windows Security Logs |
-
 | Brute Force Detection | Credential Access | T1110 | Brute Force | Windows Security Logs |
-
-| PowerShell Execution | Execution | T1059.001 | PowerShell | Sysmon |
-
+| PowerShell Execution | Execution | T1059.001 | Command and Scripting Interpreter: PowerShell | Sysmon |
 | User Account Creation | Persistence | T1136 | Create Account | Windows Security Logs |
-
-| Service Creation | Persistence | T1543.003 | Windows Service | Windows System Logs |
-
-| Scheduled Task Creation | Persistence | T1053.005 | Scheduled Task | Windows Security Logs |
-
+| Service Creation | Persistence | T1543.003 | Create or Modify System Process: Windows Service | Windows System Logs |
+| Scheduled Task Creation | Persistence | T1053.005 | Scheduled Task/Job: Scheduled Task | Windows Security Logs |
 | USB Device Detection | Lateral Movement | T1091 | Replication Through Removable Media | Windows Security Logs |
-
 | File Integrity Monitoring | Impact | T1565 | Data Manipulation | Sysmon |
 
+---
 
+## Detailed Detection Analysis
 
-\---
+### 1. Failed Login Detection
 
+**MITRE Tactic:** Credential Access  
+**Technique:** T1110 – Brute Force
 
+#### Description
+Attackers frequently attempt to gain unauthorized access by repeatedly trying incorrect passwords. This detection identifies individual failed authentication events that may indicate password guessing or reconnaissance activities.
 
-\# Detection Details
+#### Detection Method
+- **Windows Event ID:** 4625 (Failed Logon)
+- **Data Source:** Windows Security Logs
+- **Alert Condition:** Single or infrequent failed login attempts
 
+#### Significance
+Early detection of failed logons helps identify targeted reconnaissance attempts before they escalate into full brute-force attacks.
 
+---
 
-\---
+### 2. Brute Force Detection
 
+**MITRE Tactic:** Credential Access  
+**Technique:** T1110 – Brute Force
 
+#### Description
+Multiple failed login attempts within a short period indicate automated password attacks against a user account or system. This detection uses threshold-based alerting to identify coordinated attack patterns.
 
-\## 1. Failed Login Detection
+#### Detection Method
+- **Windows Event ID:** 4625 (Failed Logon)
+- **Detection Logic:** Threshold-based alerting using SPL
+- **Alert Condition:** Multiple failed logons within defined time window
 
+#### SPL Example
+```spl
+index=windows EventCode=4625 
+| stats count by dest, src 
+| where count > 10
+```
 
+#### Significance
+Threshold-based brute force detection enables rapid response to active credential compromise attempts.
 
-\### MITRE Tactic
+---
 
+### 3. PowerShell Execution Detection
 
+**MITRE Tactic:** Execution  
+**Technique:** T1059.001 – Command and Scripting Interpreter: PowerShell
 
-Credential Access
+#### Description
+PowerShell is commonly abused by attackers for executing malicious commands, downloading payloads, privilege escalation, and lateral movement. Monitoring PowerShell execution provides visibility into script-based attacks.
 
+#### Detection Method
+- **Sysmon Event ID:** 1 (Process Creation)
+- **Filter Criteria:** Image = powershell.exe
+- **Data Source:** Sysmon
 
+#### SPL Example
+```spl
+index=sysmon EventID=1 Image="*powershell.exe"
+| fields ComputerName, Image, CommandLine, ParentImage
+```
 
-\### Technique
+#### Significance
+PowerShell execution visibility is critical for detecting fileless malware, lateral movement, and post-exploitation activities.
 
+---
 
+### 4. User Account Creation Detection
 
-T1110 – Brute Force
+**MITRE Tactic:** Persistence  
+**Technique:** T1136 – Create Account
 
+#### Description
+Attackers may create new local accounts to maintain persistent access after compromising a system. This detection monitors account creation events to identify unauthorized administrative access or persistence mechanisms.
 
+#### Detection Method
+- **Windows Event ID:** 4720 (A user account was created)
+- **Data Source:** Windows Security Logs
+- **Alert Condition:** Any new account creation event
 
-\### Description
+#### Significance
+Monitoring account creation helps identify persistence mechanisms and unauthorized administrative access attempts.
 
+---
 
+### 5. Windows Service Creation Detection
 
-Attackers frequently attempt to gain unauthorized access by repeatedly trying incorrect passwords. Monitoring failed authentication events helps identify password guessing and brute-force attacks before successful compromise.
+**MITRE Tactic:** Persistence  
+**Technique:** T1543.003 – Create or Modify System Process: Windows Service
 
+#### Description
+Malicious services can be installed to automatically execute malware during system startup, providing attackers with persistent code execution. Service creation monitoring enables detection of this common persistence technique.
 
+#### Detection Method
+- **Windows Event ID:** 7045 (A new service was installed on the system)
+- **Data Source:** Windows System Logs
+- **Alert Condition:** Service creation events from non-standard paths or with suspicious names
 
-\### Splunk Detection
+#### Significance
+Service-based persistence is difficult to remove and provides reliable code execution across reboots, making this detection critical for incident response.
 
+---
 
+### 6. Scheduled Task Creation Detection
 
-\- Windows Event ID: \*\*4625\*\*
+**MITRE Tactic:** Persistence  
+**Technique:** T1053.005 – Scheduled Task/Job: Scheduled Task
 
-\- Source: Windows Security Logs
+#### Description
+Scheduled tasks are frequently used by attackers to establish persistence and execute malicious payloads automatically. This detection identifies task creation events that may indicate automated malware execution.
 
+#### Detection Method
+- **Windows Event ID:** 4698 (A scheduled task was created)
+- **Data Source:** Windows Security Logs
+- **Alert Condition:** Scheduled task creation with suspicious attributes or scripts
 
+#### Significance
+Scheduled tasks provide persistent, recurring code execution that survives system reboots, making them attractive to attackers for maintaining presence.
 
-\---
+---
 
+### 7. USB Device Detection
 
+**MITRE Tactic:** Lateral Movement  
+**Technique:** T1091 – Replication Through Removable Media
 
-\## 2. Brute Force Detection
+#### Description
+Removable media can be used to introduce malware into an environment, bypass network controls, or transfer sensitive data between systems. Monitoring USB device connections provides visibility into removable media usage.
 
+#### Detection Method
+- **Windows Event ID:** 6416 (A new external device was recognized by the system)
+- **Data Source:** Windows Security Logs
+- **Alert Condition:** USB device connection events
 
+#### Significance
+USB monitoring helps prevent data exfiltration, malware introduction via removable media, and unauthorized data transfers in sensitive environments.
 
-\### MITRE Tactic
+---
 
+### 8. File Integrity Monitoring
 
+**MITRE Tactic:** Impact  
+**Technique:** T1565 – Data Manipulation
 
-Credential Access
+#### Description
+Unauthorized file creation or modification may indicate malware activity, ransomware behavior, or attempts to tamper with sensitive data. File integrity monitoring provides real-time visibility into file system changes.
 
+#### Detection Method
+- **Sysmon Event ID:** 11 (FileCreate)
+- **Data Source:** Sysmon
+- **Alert Condition:** Files created/modified in critical directories or with suspicious extensions
 
+#### SPL Example
+```spl
+index=sysmon EventID=11 (TargetFilename="*\.exe" OR TargetFilename="*\.dll" OR TargetFilename="*\.bat")
+| fields Computer, TargetFilename, UtcTime
+```
 
-\### Technique
+#### Significance
+File integrity monitoring enables detection of ransomware, malware installation, and unauthorized data modification in real-time.
 
+---
 
+## ATT&CK Coverage Summary
 
-T1110 – Brute Force
+| Tactic | Techniques | Count |
+|---|---|---|
+| Credential Access | T1110 | 1 |
+| Execution | T1059.001 | 1 |
+| Persistence | T1136, T1543.003, T1053.005 | 3 |
+| Lateral Movement | T1091 | 1 |
+| Impact | T1565 | 1 |
+| **Total** | **7 Unique Techniques** | **7** |
 
+---
 
+## Detection Coverage Statistics
 
-\### Description
+| Metric | Value |
+|---|---|
+| Total Detection Rules | 8 |
+| MITRE Tactics Covered | 5 |
+| MITRE Techniques Covered | 7 |
+| Windows Event IDs | 4625, 4720, 4698, 6416, 7045 |
+| Sysmon Event IDs | 1, 11 |
+| Primary Data Sources | Windows Security Logs, Sysmon |
 
+---
 
+## Coverage Gaps & Future Enhancements
 
-Multiple failed login attempts within a short period may indicate an automated password attack against a user account.
+To improve detection coverage, consider implementing detections for:
 
+- **Discovery Techniques:** T1087 (Account Discovery), T1010 (Application Window Discovery)
+- **Defense Evasion:** T1197 (BITS Jobs), T1140 (Deobfuscate/Decode Files or Information)
+- **Command & Control:** T1071 (Application Layer Protocol)
+- **Exfiltration:** T1041 (Exfiltration Over C2 Channel), T1020 (Automated Exfiltration)
 
+---
 
-\### Splunk Detection
+## Benefits of MITRE ATT&CK Mapping
 
+✓ **Standardization:** Aligns security detections with an industry-recognized, adversary-focused framework  
+✓ **Threat Understanding:** Helps SOC analysts understand and contextualize attacker behavior  
+✓ **Threat Hunting:** Enables proactive threat hunting based on known attack patterns  
+✓ **Gap Analysis:** Identifies gaps in detection coverage across the attack lifecycle  
+✓ **Maturity Assessment:** Measures and improves security monitoring maturity  
+✓ **Compliance:** Aligns with enterprise SOC best practices and security compliance requirements  
+✓ **Communication:** Provides common language for security teams and stakeholders  
 
+---
 
-\- Windows Event ID: \*\*4625\*\*
+## References
 
-\- Threshold-based alerting using SPL
+- [MITRE ATT&CK Framework](https://attack.mitre.org/)
+- [Sysmon Documentation](https://docs.microsoft.com/en-us/sysinternals/downloads/sysmon)
+- [Windows Event ID Reference](https://docs.microsoft.com/en-us/windows/security/threat-protection/auditing/audit-events)
 
+---
 
+## Conclusion
 
-\---
+This project demonstrates practical Security Operations Center (SOC) monitoring by mapping Windows security detections to the MITRE ATT&CK Framework. By establishing this mapping, we create a foundation for:
 
+- **Comprehensive Threat Coverage:** Understanding which attack techniques are detected
+- **Effective Incident Response:** Rapidly identifying and responding to known attack patterns
+- **Continuous Improvement:** Identifying coverage gaps and prioritizing new detections
+- **SOC Maturity:** Building industry-aligned detection and response capabilities
 
-
-\## 3. PowerShell Execution Detection
-
-
-
-\### MITRE Tactic
-
-
-
-Execution
-
-
-
-\### Technique
-
-
-
-T1059.001 – PowerShell
-
-
-
-\### Description
-
-
-
-PowerShell is commonly abused by attackers for executing malicious commands, downloading payloads, privilege escalation, and lateral movement.
-
-
-
-\### Splunk Detection
-
-
-
-\- Sysmon Event ID: \*\*1\*\*
-
-\- Image = powershell.exe
-
-
-
-\---
-
-
-
-\## 4. User Account Creation Detection
-
-
-
-\### MITRE Tactic
-
-
-
-Persistence
-
-
-
-\### Technique
-
-
-
-T1136 – Create Account
-
-
-
-\### Description
-
-
-
-Attackers may create new local accounts to maintain persistent access after compromising a system.
-
-
-
-\### Splunk Detection
-
-
-
-\- Windows Event ID: \*\*4720\*\*
-
-
-
-\---
-
-
-
-\## 5. Windows Service Creation Detection
-
-
-
-\### MITRE Tactic
-
-
-
-Persistence
-
-
-
-\### Technique
-
-
-
-T1543.003 – Windows Service
-
-
-
-\### Description
-
-
-
-Malicious services can be installed to automatically execute malware during system startup.
-
-
-
-\### Splunk Detection
-
-
-
-\- Windows Event ID: \*\*7045\*\*
-
-
-
-\---
-
-
-
-\## 6. Scheduled Task Detection
-
-
-
-\### MITRE Tactic
-
-
-
-Persistence
-
-
-
-\### Technique
-
-
-
-T1053.005 – Scheduled Task
-
-
-
-\### Description
-
-
-
-Scheduled tasks are frequently used by attackers to establish persistence and execute malicious payloads automatically.
-
-
-
-\### Splunk Detection
-
-
-
-\- Windows Event ID: \*\*4698\*\*
-
-
-
-\---
-
-
-
-\## 7. USB Device Detection
-
-
-
-\### MITRE Tactic
-
-
-
-Lateral Movement
-
-
-
-\### Technique
-
-
-
-T1091 – Replication Through Removable Media
-
-
-
-\### Description
-
-
-
-Removable media can be used to introduce malware into an environment or transfer sensitive data between systems.
-
-
-
-\### Splunk Detection
-
-
-
-\- Windows Event ID: \*\*6416\*\*
-
-
-
-\---
-
-
-
-\## 8. File Integrity Monitoring
-
-
-
-\### MITRE Tactic
-
-
-
-Impact
-
-
-
-\### Technique
-
-
-
-T1565 – Data Manipulation
-
-
-
-\### Description
-
-
-
-Unauthorized file creation or modification may indicate malware activity, ransomware behavior, or attempts to tamper with sensitive data.
-
-
-
-\### Splunk Detection
-
-
-
-\- Sysmon Event ID: \*\*11\*\*
-
-
-
-\---
-
-
-
-\# ATT\&CK Coverage Summary
-
-
-
-| Tactic | Techniques Covered |
-
-|----------|-------------------|
-
-| Credential Access | T1110 |
-
-| Execution | T1059.001 |
-
-| Persistence | T1136, T1543.003, T1053.005 |
-
-| Lateral Movement | T1091 |
-
-| Impact | T1565 |
-
-
-
-\---
-
-
-
-\# Detection Coverage Statistics
-
-
-
-\- Total Detection Rules: \*\*8\*\*
-
-\- MITRE Tactics Covered: \*\*5\*\*
-
-\- MITRE Techniques Covered: \*\*7\*\*
-
-\- Windows Event IDs Used: \*\*4625, 4720, 4698, 6416, 7045\*\*
-
-\- Sysmon Event IDs Used: \*\*1, 11\*\*
-
-
-
-\---
-
-
-
-\# Benefits of MITRE ATT\&CK Mapping
-
-
-
-\- Standardizes security detections using an industry-recognized framework.
-
-\- Helps SOC analysts understand attacker behavior.
-
-\- Improves threat hunting and incident investigation.
-
-\- Identifies gaps in detection coverage.
-
-\- Enhances security monitoring maturity.
-
-\- Aligns detections with enterprise SOC best practices.
-
-
-
-\---
-
-
-
-\# Conclusion
-
-
-
-This project aligns Windows security detections with the MITRE ATT\&CK Framework to demonstrate practical Security Operations Center (SOC) monitoring capabilities. By mapping detection logic to attacker tactics and techniques, the project provides a structured approach to identifying credential attacks, malicious execution, persistence mechanisms, lateral movement, and data manipulation activities. This mapping improves detection visibility, supports incident response, and reflects real-world enterprise SOC workflows.
-
+The eight detection rules implemented in this project cover critical attack phases including Credential Access, Execution, Persistence, Lateral Movement, and Impact, providing a well-rounded foundation for enterprise threat detection.
